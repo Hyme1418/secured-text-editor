@@ -17,7 +17,7 @@ class SecuredTextEditor(tk.Tk):
 
     def create_menu(self):
         menu_bar = tk.Menu(self)
-        file_menu = tk.Menu(menu_bar)
+        file_menu = tk.Menu(menu_bar, tearoff=0)
         file_menu.add_command(label="New", command=self.new_file)
         file_menu.add_command(label="Open", command=self.open_file)
         file_menu.add_command(label="Save", command=self.save_file)
