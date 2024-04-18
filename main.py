@@ -1,72 +1,166 @@
+import os
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, simpledialog
 from cryptography.fernet import Fernet
-import base64
 
-# Import the necessary modules
 
 class SecuredTextEditor(tk.Tk):
+
     def __init__(self):
+        """Initialize the application"""
         super().__init__()
         self.title("Secured Text Editor")
         self.geometry("800x600")
-        self.key = None  # Initialize the encryption key to None
-        self.text_area = tk.Text(self, font=("Courier", 12))
-        self.text_area.pack(fill=tk.BOTH, expand=True)
+        self.key = None
+        self.text = tk.Text(self, font=("Courier New", 12))
+        self.text.pack(fill=tk.BOTH, expand=True)
+        # self.iconbitmap('icon.ico')
         self.create_menu()
+        self.bind_shortcuts()
 
     def create_menu(self):
-        menu_bar = tk.Menu(self)
-        file_menu = tk.Menu(menu_bar)
+        """Create a menu with file operations"""
+        menubar = tk.Menu(self)
+
+        file_menu = tk.Menu(menubar, tearoff=False)
+        # add file menu
         file_menu.add_command(label="New", command=self.new_file)
         file_menu.add_command(label="Open", command=self.open_file)
         file_menu.add_command(label="Save", command=self.save_file)
+
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.quit)
-        menu_bar.add_cascade(label="File", menu=file_menu)
-        self.config(menu=menu_bar)
+
+        # add about us menu
+        aboutus_menu = tk.Menu(menubar, tearoff=False)
+        aboutus_menu.add_command(label="About us", command=self.show_aboutus_popup)
+
+        # add help menu
+        help_menu = tk.Menu(menubar, tearoff=False)
+        help_menu.add_command(label="Help", command=self.show_help_popup)
+
+        # add cascade menu
+        menubar.add_cascade(label="File", menu=file_menu)
+        menubar.add_cascade(label="About us", menu=aboutus_menu)
+        menubar.add_cascade(label="Help", menu=help_menu)
+
+        # use menubar as the menu
+        self.config(menu=menubar)
+
+    def show_help_popup(self):
+        """Show a popup with information about the application"""
+        about_text = """This is a secured text editor application that allows you to encrypt and decrypt text data."""
+        messagebox.showinfo("Help", about_text)
+
+    def show_aboutus_popup(self):
+        """Show a popup with information about the team members"""
+        about_text = (
+            "Team members\n\n"
+            "Sirasit Puangpathanachai 6488133\n"
+            "Thanawat Jarusuthirug 6488178\n"
+        )
+        messagebox.showinfo("About us", about_text)
+
+    def create_key(self):
+        """Generate a new key"""
+        self.key = Fernet.generate_key()
+
+    def encrypt_text(self):
+        """Encrypt the text in the text widget"""
+        if self.key is None:
+            self.create_key()
+        fernet = Fernet(self.key)
+        text_to_encrypt = self.text.get(1.0, tk.END).encode()
+        encrypted_text = fernet.encrypt(text_to_encrypt).decode()
+        self.text.delete(1.0, tk.END)
+        self.text.insert(1.0, encrypted_text)
+
+    def decrypt_text(self):
+        """Decrypt the text in the text widget"""
+        try:
+            fernet = Fernet(self.key)
+            text_to_decrypt = self.text.get(1.0, tk.END).encode()
+            decrypted_text = fernet.decrypt(text_to_decrypt).decode()
+            self.text.delete(1.0, tk.END)
+            self.text.insert(1.0, decrypted_text)
+        except:
+            messagebox.showerror(
+                "Decryption Error", "Failed to decrypt! Check your key and try again."
+            )
+            return False
+        return True
 
     def new_file(self):
-        self.text_area.delete("1.0", tk.END)  # Clear the text area
-        self.key = None  # Reset the encryption key
+        """Clear the text widget and reset the key"""
+        self.text.delete(1.0, tk.END)
+        self.key = None
 
     def open_file(self):
-        file_path = filedialog.askopenfilename(defaultextension=".txt")
+        """Open a file and display its content in the text widget"""
+        file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
         if file_path:
             try:
                 with open(file_path, "r") as file:
-                    encrypted_data = file.read()  # Read the encrypted data from the file
-                self.text_area.delete("1.0", tk.END)  # Clear the text area
-                decrypted_data = self.decrypt_data(encrypted_data)  # Decrypt the data
-                self.text_area.insert("1.0", decrypted_data)  # Insert the decrypted data into the text area
+                    self.text.delete(1.0, tk.END)
+                    self.text.insert(1.0, file.read())
             except Exception as e:
-                messagebox.showerror("Error", str(e))  # Show an error message if an exception occurs
+                messagebox.showerror("Error", "Failed to read file: " + str(e))
+                return
+
+            key = simpledialog.askstring("Encryption Key", "Enter the encryption key:")
+            if key:
+                self.key = key.encode()
+                if not self.decrypt_text():
+                    self.new_file()
+                # messagebox.showinfo("Decrypted", "File decrypted successfully.")
+            else:
+                messagebox.showinfo(
+                    "Cancelled", "Operation cancelled! File is not decrypted."
+                )
 
     def save_file(self):
-        file_path = filedialog.asksaveasfilename(defaultextension=".txt")
+        """Save the text to a file"""
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".txt", filetypes=[("Text files", "*.txt")]
+        )
         if file_path:
             try:
-                text_content = self.text_area.get("1.0", tk.END)  # Get the text content from the text area
-                encrypted_data = self.encrypt_data(text_content)  # Encrypt the text content
+                self.encrypt_text()
                 with open(file_path, "w") as file:
-                    file.write(encrypted_data)  # Write the encrypted data to the file
+                    file.write(self.text.get(1.0, tk.END))
+                self.show_key_dialog(self.key.decode())
             except Exception as e:
-                messagebox.showerror("Error", str(e))  # Show an error message if an exception occurs
+                messagebox.showerror("Error", "Failed to save file: " + str(e))
 
-    def encrypt_data(self, data):
-        if not self.key:
-            self.key = Fernet.generate_key()  # Generate a new encryption key if it doesn't exist
-        fernet = Fernet(self.key)
-        encrypted_data = fernet.encrypt(data.encode())  # Encrypt the data
-        return base64.urlsafe_b64encode(encrypted_data).decode()  # Encode the encrypted data using base64
+    def show_key_dialog(self, key):
+        """Show a dialog with the encryption key"""
+        dialog = tk.Toplevel(self)
+        dialog.title("Encryption Key")
+        tk.Label(dialog, text="Copy your encryption key:").pack(pady=5)
+        tk.Label(dialog, text=key).pack(pady=5)
+        tk.Button(
+            dialog,
+            text="Copy to Clipboard",
+            command=lambda: self.copy_to_clipboard(key),
+        ).pack(pady=5)
+        tk.Button(dialog, text="Close", command=dialog.destroy).pack(pady=5)
 
-    def decrypt_data(self, encrypted_data):
-        if not self.key:
-            return ""  # Return an empty string if there is no encryption key
-        fernet = Fernet(self.key)
-        encrypted_data = base64.urlsafe_b64decode(encrypted_data.encode())  # Decode the base64-encoded data
-        decrypted_data = fernet.decrypt(encrypted_data)  # Decrypt the data
-        return decrypted_data.decode()  # Decode the decrypted data to a string
+    def copy_to_clipboard(self, key):
+        """Copy the key to clipboard when the button is clicked"""
+        self.clipboard_clear()
+        self.clipboard_append(key)
+        # messagebox.showinfo("Copied", "Key copied to clipboard!")
+
+    def bind_shortcuts(self):
+        """Bind keyboard shortcuts to functions"""
+
+        # Ctrl+s to save file
+        self.bind("<Control-s>", lambda event: self.save_file())
+        # Ctrl+o to open file
+        self.bind("<Control-o>", lambda event: self.open_file())
+        # Ctrl+n to create new file
+        self.bind("<Control-n>", lambda event: self.new_file())
+
 
 if __name__ == "__main__":
     app = SecuredTextEditor()
