@@ -3,3 +3,5 @@ build
 test.py
 test2.py
 main.spec
+test
+encryption_key.txt
