@@ -2,23 +2,23 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 from cryptography.fernet import Fernet
-import json
 
 
 class SecuredTextEditor(tk.Tk):
+
     def __init__(self):
         """Initialize the application"""
         super().__init__()
         self.title("Secured Text Editor")
         self.geometry("800x600")
+        self.key = None
         self.text = tk.Text(self, font=("Courier New", 12))
         self.text.pack(fill=tk.BOTH, expand=True)
+        # self.iconbitmap('icon.ico')
         self.create_menu()
         self.bind_shortcuts()
-
-        self.key_file = "keys.json"
-        self.filename_to_key = {}
-        self.load_keys()
+        # Load or generate the encryption key when the application starts
+        self.load_or_generate_key()
 
     def create_menu(self):
         """Create a menu with file operations"""
@@ -62,72 +62,42 @@ class SecuredTextEditor(tk.Tk):
         )
         messagebox.showinfo("About us", about_text)
 
-    def load_keys(self):
-        """Load filename-key pairs from the JSON file."""
+    def load_or_generate_key(self):
+        """Load the encryption key from a file or generate a new key if the file doesn't exist"""
         try:
-            with open(self.key_file, "r") as f:
-                self.filename_to_key = json.load(f)
+            with open("encryption_key.txt", "rb") as key_file:
+                self.encryption_key = key_file.read()
         except FileNotFoundError:
-            pass  # Ignore if the file doesn't exist yet
+            self.encryption_key = Fernet.generate_key()
+            with open("encryption_key.txt", "wb") as key_file:
+                key_file.write(self.encryption_key)
 
-    def save_keys(self):
-        """Save filename-key pairs to the JSON file."""
-        with open(self.key_file, "w") as f:
-            json.dump(self.filename_to_key, f, indent=4)
-
-    def generate_key_for_file(self, filename):
-        """Generates a new key for a given filename and stores it."""
-        key = Fernet.generate_key()
-        self.filename_to_key[filename] = key.decode()  # Store as string
-        self.save_keys()
-        return key
-
-    def get_key_for_file(self, filename):
-        """Retrieves the key associated with a filename."""
-        if filename in self.filename_to_key:
-            return self.filename_to_key[filename].encode()  # Convert back to bytes
-        else:
-            return None  # No key found for this file
+        self.fernet = Fernet(self.encryption_key)
 
     def new_file(self):
-        """Clear the text widget and generate a new key for the new file."""
+        """Clear the text widget and reset the key"""
         self.text.delete(1.0, tk.END)
-        filename = filedialog.asksaveasfilename(
-            defaultextension=".txt", filetypes=[("Text files", "*.txt")]
-        )
-        if filename:
-            self.generate_key_for_file(filename)
 
     def open_file(self):
-        """Open a file, retrieve its key, and decrypt the content."""
+        """Open a file and display its content in the text widget"""
         file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
         if file_path:
-            key = self.get_key_for_file(file_path)
-            if key:
-                fernet = Fernet(key)
-                with open(file_path, "rb") as file:
-                    encrypted_data = file.read()
-                try:
-                    decrypted_data = fernet.decrypt(encrypted_data).decode()
-                    self.text.delete(1.0, tk.END)
-                    self.text.insert(tk.END, decrypted_data)
-                except Exception as e:
-                    messagebox.showerror("Error", "Failed to open file: " + str(e))
-            else:
-                messagebox.showerror("Error", "No key found for this file.")
+            with open(file_path, "rb") as file:
+                encrypted_data = file.read()
+            try:
+                decrypted_data = self.fernet.decrypt(encrypted_data).decode()
+                self.text.delete(1.0, tk.END)
+                self.text.insert(tk.END, decrypted_data)
+            except Exception as e:
+                messagebox.showerror("Error", "Failed to open file: " + str(e))
 
     def save_file(self):
-        """Encrypt the text content using the associated key and save the file."""
+        text_data = self.text.get(1.0, tk.END)
+        encrypted_data = self.fernet.encrypt(text_data.encode())
         file_path = filedialog.asksaveasfilename(
             defaultextension=".txt", filetypes=[("Text files", "*.txt")]
         )
         if file_path:
-            key = self.get_key_for_file(file_path)
-            if not key:  # Generate a new key if none exists
-                key = self.generate_key_for_file(file_path)
-            fernet = Fernet(key)
-            text_data = self.text.get(1.0, tk.END)
-            encrypted_data = fernet.encrypt(text_data.encode())
             with open(file_path, "wb") as file:
                 file.write(encrypted_data)
 
