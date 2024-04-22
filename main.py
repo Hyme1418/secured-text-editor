@@ -90,13 +90,8 @@ class SecuredTextEditor(tk.Tk):
             return None  # No key found for this file
 
     def new_file(self):
-        """Clear the text widget and generate a new key for the new file."""
+        """Clear the text widget."""
         self.text.delete(1.0, tk.END)
-        filename = filedialog.asksaveasfilename(
-            defaultextension=".txt", filetypes=[("Text files", "*.txt")]
-        )
-        if filename:
-            self.generate_key_for_file(filename)
 
     def open_file(self):
         """Open a file, retrieve its key, and decrypt the content."""
